@@ -96,10 +96,10 @@ under varying soil conditions. The script can be found in Daliakopoulos
 # Case study
 
 Let’s assume a 100 cm deep profile of sandy soil ($\theta_r$ = 0.045
-$cm^3~cm^{-3}$, $\theta_s$ = 0.43 $cm^3~cm^{-3}$, $\alpha$ = 0.145
+$cm^3 cm^{-3}$, $\theta_s$ = 0.43 $cm^3 cm^{-3}$, $\alpha$ = 0.145
 $cm^{-1}$, $n$ = 2.68, $l$ = 0.5, and $K_s$ = 0.495 $cm~min^{-1}$ with a
-variance of 0.3 $cm~min^{-1}$). Given a 10-minute irrigation event of 1
-$cm~min^{-1}$. 10 simulations along the range of $K_s$ provide enough
+variance of 0.3 $cm min^{-1}$). Given a 10-minute irrigation event of 1
+$cm min^{-1}$. 10 simulations along the range of $K_s$ provide enough
 data to visualise the range of $\theta$ throughout the soil profile.
 Figure 1 shows the value of $\theta$ for 9 timesteps (1, 10, 20, …, and
 960 minutes) picked across the simulations.
