@@ -99,7 +99,7 @@ matric potential, and hydraulic conductivity.
 ## Automation in R
 Here I use an R Quarto (R Core Team, 2021) script as a wrapper to automate and manage multiple Hydrus-1D simulations. This approach involves generating a separate directory for each simulation, with each directory containing edited input files (Selector.in, Atmosph.in, and PROFILE.dat) tailored to different soil hydraulic parameters. After preparing the input files, Hydrus-1D is executed from the command line using R’s `system` function, which enabled the seamless integration of the external model into the R
 environment. The script supports both single-processor execution for sequential runs and parallel processing to accelerate the simulations using the `parallel` package (R Core Team, 2021). Once the simulations are completed, the results are collected and visualized using the `ggplot2` package (Wickham, 2016). This allows for the generation of plots illustrating soil moisture profiles over time, facilitating the comparison of
-different scenarios and their outcomes under varying soil conditions.
+different scenarios and their outcomes under varying soil conditions. The script can be found in Daliakopoulos (2024). 
 
 # Case study
 
@@ -338,6 +338,8 @@ print(p)
 The script facilitates the visualisation of HYDRUS-1D results for simple simulations of water trasnport is soils. Including more formal read/write functions from the `hydrusR` package (Acharya, 2020) will allow for higher diversity in the scenarios that can be simulated. 
 
 # References
+
+Daliakopoulos, I. (2024). hydrus-soil-profile. Accessible online: https://github.com/daliakopoulos/hydrus-soil-profile
 
 Diamantopoulos, E. (2017). Running Hydrus (1D) in Matlab, PC-PROGRESS. Accessible online: https://www.pc-progress.com/Downloads/Tutorials/Matlab_RunningHydrus.pdf
 
