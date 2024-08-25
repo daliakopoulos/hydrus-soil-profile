@@ -1,0 +1,370 @@
+---
+title: "Running multiple HYDRUS-1D simulations using R"
+author: "Daliakopoulos, I., Asst. Professor, Department of Agriculture, Hellenic Mediterranean University, Greece"
+date: "`r format(Sys.time())`"
+crossref:
+  fig-title: Figure    # (default is "Figure")
+  tbl-title: Table     # (default is "Table")
+  title-delim: ":"     # (default is ":")
+format: html 
+  # pdf:
+  #   pdf-engine: latexmk
+  #   pdf-engine-opt: -xelatex
+  #   # monofont: "DejaVu Sans Mono"
+  #   mainfont: "Times New Roman"
+  # docx:
+  #  fig-dpi: 600
+  #  reference-doc: template.docx
+   #template from here: https://github.com/andrewheiss/hikmah-academic-quarto
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r}
+#| label: Options
+#| include: false
+#| echo: false
+#| cache: false
+#| warning: false
+
+# Clear environment
+rm(list = ls())
+ 
+options(digits=2)
+options(kableExtra.auto_format = FALSE)
+
+```
+
+```{r}
+#| label: Libraries
+#| include: false
+#| echo: false
+#| cache: false
+#| warning: false
+
+# Load required libraries
+library(ggplot2)
+library(dplyr)
+library(parallel)
+
+```
+
+```{r}
+#| label: Paths
+#| include: false
+#| echo: false
+#| cache: false
+#| warning: false
+
+# Set paths and initialize directories
+hydrus_exec <- "C:/Program Files (x86)/PC-Progress/Hydrus-1D 4.xx/H1D_calc.exe"
+hydrus_ref <- "C:/Users/Public/Documents/PC-Progress/Hydrus-1D 4.xx/Examples/Direct/5SEASON_test1"
+work_dir <- paste(getwd(), "/Simulations", sep="")
+dir.create(work_dir)
+dir.create(work_dir, showWarnings = FALSE)
+```
+
+# Introduction
+
+Hydrus-1D is a widely used numerical model developed for simulating water, heat, and solute movement in variably saturated porous media such as soil and hydroponic substrates. Its primary focus is on solving the Richards equation for unsaturated flow, and it is capable of handling a wide variety of soil profiles and boundary conditions, making it an essential tool for researchers and engineers in the fields of hydrology, soil science, and environmental engineering. One of the key applications of Hydrus-1D is the simulation of soil moisture profiles, where it models the distribution of water content through soil layers under various conditions of infiltration, evaporation, and root uptake, providing detailed insights into the subsurface flow processes (Šimůnek et al., 2008). 
+
+Despite its robust capabilities for simulating single runs with precise control over soil hydraulic properties and boundary conditions, Hydrus-1D was not originally designed to support multiple simulations in a Monte Carlo framework. This limitation poses challenges for users who wish to assess the impact of uncertainty in soil parameters, such as hydraulic conductivity ($Ks$) or soil water retention characteristics, on the simulated soil profiles (e.g. Kontaxakis et al., 2023, Papadimitriou et al., 2024). In such cases, researchers often need to develop custom scripts or workflows such as the one provided by Groenendyk (2014) and Diamantopoulos (2017) for MATLAB. Packages `hydrusR` (Acharya, 2020) and `RHydrus` (Temple Lang, 2023) may also support such workflows in R. 
+
+# Methodology
+## Hydrus 1D
+Hydrus-1D solves the Richards equation for water flow in unsaturated soils, incorporating the van Genuchten-Mualem (vG-Mualem) equation to describe the soil-water retention curve and hydraulic conductivity as a function of soil moisture content. The vG-Mualem model is widely used for describing the hydraulic properties of unsaturated porous media. The soil-water retention function is given by:
+
+$$
+\theta(h) = \theta_r + \frac{\theta_s - \theta_r}{\left(1 + | \alpha h |^n \right)^m}
+$$
+
+where $\theta(h)$ is the volumetric water content at a given matric potential $h$, $\theta_r$ and $ \theta_s $ are the residual and saturated water contents, respectively, $\alpha$ is a parameter related to the inverse of the air-entry suction, and $n$ and $m$ are empirical shape parameters with $m = 1 - 1/n$.
+
+The unsaturated hydraulic conductivity $K(\theta)$ is described by the Mualem conductivity model:
+
+$$
+K(\theta) = K_s S_e^{l} \left[ 1 - \left( 1 - S_e^{1/m} \right)^m \right]^2
+$$
+
+where $K_s$ is the saturated hydraulic conductivity, $l$ is an empirical pore-connectivity parameter, and $S_e$ is the effective saturation given by:
+
+$$
+S_e = \frac{\theta - \theta_r}{\theta_s - \theta_r}
+$$
+
+The van Genuchten-Mualem model allows Hydrus-1D to simulate complex soil-water dynamics with high accuracy across a wide range of soil types and conditions (van Genuchten, 1980; Mualem, 1976). By incorporating these equations, Hydrus-1D can model water flow in variably saturated soils, accounting for the nonlinear relationship between soil moisture,
+matric potential, and hydraulic conductivity.
+
+## Automation in R
+Here I use an R Quarto (R Core Team, 2021) script as a wrapper to automate and manage multiple Hydrus-1D simulations. This approach involves generating a separate directory for each simulation, with each directory containing edited input files (Selector.in, Atmosph.in, and PROFILE.dat) tailored to different soil hydraulic parameters. After preparing the input files, Hydrus-1D is executed from the command line using R’s `system` function, which enabled the seamless integration of the external model into the R
+environment. The script supports both single-processor execution for sequential runs and parallel processing to accelerate the simulations using the `parallel` package (R Core Team, 2021). Once the simulations are completed, the results are collected and visualized using the `ggplot2` package (Wickham, 2016). This allows for the generation of plots illustrating soil moisture profiles over time, facilitating the comparison of
+different scenarios and their outcomes under varying soil conditions.
+
+# Case study
+
+Let's assume a 100 cm deep profile of sandy soil ($\theta_r$ = 0.045 $cm^3~cm^{-3}$, $\theta_s$ = 0.43 $cm^3~cm^{-3}$, $\alpha$ = 0.145 $cm^{-1}$, $n$ = 2.68, $l$ = 0.5, and $K_s$ = 0.495 $cm~min^{-1}$ with a variance of 0.3 $cm~min^{-1}$). Given a 10-minute irrigation event of 1 $cm~min^{-1}$. 10 simulations along the range of $K_s$ provide enough data to visualise the range of $\theta$ throughout the soil profile. Figure 1 shows the value of $\theta$ for 9 timesteps (1, 10, 20, ..., and 960 minutes) picked across the simulations. 
+
+
+
+```{r}
+#| label: Definitions
+#| include: false
+#| echo: false
+#| cache: false
+#| warning: false
+
+# Define simulation parameters
+Lz <- 100       # depth in z direction (in centimeters, 1 meter)
+nz <- 100       # number of grid points in z direction
+dz <- Lz / nz   # vertical grid spacing in cm
+theta <- rep(0.1, nz)  # Initial soil moisture (arbitrary)
+
+# Create multiple simulation folders and generate input files
+num_sim <- 10  # Number of simulations
+Ks_center <- 0.495  # Center value for Ks
+Ks_variance <- 0.3  # Variability for Ks
+
+run.in.parallel <- T
+
+# Example atmosphere data
+atm_data <- data.frame(
+  tAtm = c(10, 1000),
+  Prec = c(1, 0)
+)
+
+# Define the plot times to be included in the results
+plot_times <- c(1, 10, 20, 40, 80, 160, 320, 640, 960)
+```
+
+```{r}
+#| label: Functions
+#| include: true
+#| echo: false
+#| cache: false
+#| warning: false
+
+# Function to modify the Selector.in file for soil parameters and lEnter
+modify_selector_in <- function(sim_dir, soil_params) {
+  selector_in <- readLines(file.path(hydrus_ref, "Selector.in"))
+  
+  # Modify lEnter to 'f'
+  lEnter_line <- grep("^ *lPrintD\\s+nPrintSteps\\s+tPrintInterval\\s+lEnter", selector_in) + 1
+  line_elements <- strsplit(selector_in[lEnter_line], "\\s+")[[1]]
+  line_elements[length(line_elements)] <- "f"
+  selector_in[lEnter_line] <- paste(line_elements, collapse = " ")
+  
+  # Find soil parameters line and update with new values
+  soil_header_line <- grep("thr\\s+ths\\s+Alfa\\s+n\\s+Ks\\s+l", selector_in)
+  soil_line <- soil_header_line + 1
+  selector_in[soil_line] <- sprintf("%f %f %f %f %f %f", 
+                                    soil_params$thr, soil_params$ths, 
+                                    soil_params$alpha, soil_params$n, 
+                                    soil_params$Ks, soil_params$l)
+  
+  # Write back to the simulation directory
+  writeLines(selector_in, file.path(sim_dir, "Selector.in"))
+}
+
+# Function to create PROFILE.dat (example of dynamic creation)
+create_profile_dat <- function(sim_dir, theta, dz, nz) {
+  profile_content <- readLines(file.path(hydrus_ref, "PROFILE.dat"))
+  writeLines(profile_content, file.path(sim_dir, "PROFILE.dat"))
+}
+
+# Function to modify the Atmosph.in file with new time steps and precipitation values
+modify_atmosph_in <- function(sim_dir, atm_data) {
+  atmosph_in <- readLines(file.path(hydrus_ref, "Atmosph.in"))
+  start_line <- 10
+  end_line <- start_line + nrow(atm_data) - 1
+  new_lines <- apply(atm_data, 1, function(row) {
+    paste(row[1], row[2], 0, 0, 1e6, 0, 0, 0, collapse = "\t")
+  })
+  atmosph_in[start_line:end_line] <- new_lines
+  writeLines(atmosph_in, file.path(sim_dir, "Atmosph.in"))
+}
+
+# Function to run Hydrus
+run_hydrus <- function(exec_path, sim_dir) {
+  command <- paste(shQuote(exec_path), shQuote(sim_dir))
+  result <- system(command, wait = TRUE, intern = TRUE, ignore.stdout = T, ignore.stderr = FALSE)
+  return(invisible(result))
+}
+
+
+
+# Create empty lists to store paths and Ks values
+paths <- vector("list", num_sim)
+
+# Make sure the central value is the one provided by the user
+if (num_sim %% 2 == 0){num_sim <- num_sim + 1}
+Ks_values <- seq(Ks_center - Ks_variance, Ks_center + Ks_variance, length.out = num_sim)
+
+
+
+# Create simulation folders and input files
+for (i in 1:num_sim) {
+  sim_dir <- file.path(work_dir, paste0("run_", i))
+  dir.create(sim_dir)
+  
+  # Soil parameters with varying Ks
+  soil_params <- list(thr = 0.045, ths = 0.43, alpha = 0.145, n = 2.68, Ks = Ks_values[i], l = 0.5)
+  
+  # Create input files
+  create_profile_dat(sim_dir, theta, dz, nz)
+  modify_selector_in(sim_dir, soil_params)
+  modify_atmosph_in(sim_dir, atm_data)
+  
+  paths[[i]] <- sim_dir
+}
+
+if (run.in.parallel!=T){
+  # Run Hydrus for each simulation sequentially
+  for (sim_dir in paths) {
+    run_hydrus(hydrus_exec, sim_dir)
+  }
+}else{
+  # Run Hydrus for each simulation in parallel
+  num_cores <- detectCores() - 2
+  cl <- makeCluster(num_cores)
+  clusterExport(cl, c("hydrus_exec", "paths", "run_hydrus"))
+  parLapply(cl, paths, function(sim_dir) {
+    run_hydrus(hydrus_exec, sim_dir)
+  })
+  stopCluster(cl)
+}
+
+# Collect and plot results
+all_results <- list()
+
+
+
+for (i in 1:num_sim) {
+  sim_dir <- paths[[i]]
+  nod_inf_file <- file.path(sim_dir, "Nod_Inf.out")
+  
+  if (file.exists(nod_inf_file)) {
+    nod_inf_lines <- readLines(nod_inf_file)
+    time_indices <- grep("^\\s*Time:", nod_inf_lines)
+    time_values <- as.numeric(sub("^\\s*Time:\\s*", "", nod_inf_lines[time_indices]))
+    
+    # Iterate through each timestep of interest
+    for (timestep in plot_times) {
+      time_index <- which.min(abs(time_values - timestep))
+      
+      if (!is.na(time_index) && length(time_index) > 0) {
+        start_index <- time_indices[time_index] + 6
+        end_index <- start_index + nz - 1
+        node_data <- nod_inf_lines[start_index:end_index]
+        
+        # Convert node data to a data frame
+        node_data_df <- do.call(rbind, strsplit(node_data, "\\s+"))[, c(3, 5)]  # Depth and Moisture
+        node_data_df <- data.frame(z = as.numeric(node_data_df[, 1]) / 100,     # Convert depth to meters
+                                   theta = as.numeric(node_data_df[, 2]), 
+                                   timestep = paste0("t = ", timestep, " minutes"),  # Format timestep for plot
+                                   simulation = paste0("Ks = ", round(Ks_values[i], 3)))  # Format simulation label
+        
+        # Append to the overall results list
+        all_results[[length(all_results) + 1]] <- node_data_df
+      }
+    }
+  }
+}
+
+# Combine all results into a single dataframe
+all_theta_df <- bind_rows(all_results)
+
+# Ensure timesteps are ordered correctly by converting them to factors
+all_theta_df$timestep <- factor(all_theta_df$timestep, levels = paste0("t = ", sort(plot_times), " minutes"))
+
+# Determine the minimum, center, and maximum Ks values
+Ks_min <- min(Ks_values)
+Ks_max <- max(Ks_values)
+
+# Identify which simulation is closest to the center Ks value (handle precision issues)
+center_sim <- which.min(abs(Ks_values - Ks_center))
+
+# Add a color column to identify special cases
+all_theta_df$color_group <- case_when(
+  all_theta_df$simulation == paste0("Ks = ", round(Ks_min, 3)) ~ "Ks_min",
+  all_theta_df$simulation == paste0("Ks = ", round(Ks_values[center_sim], 3)) ~ "Ks_center",
+  all_theta_df$simulation == paste0("Ks = ", round(Ks_max, 3)) ~ "Ks_max",
+  TRUE ~ "Ks"
+)
+```
+
+```{r}
+#| label: fig-1
+#| include: true
+#| cache: false
+#| echo: false
+#| warning: false
+#| fig.height: 8
+#| fig.width: 7
+#| out.width: "100%"
+#| fig-cap: "Soil moisture $\\theta~[cm^3~cm{-3}]$ for 9 timesteps (1, 10, 20, ..., and 960 minutes) picked across multiple HYDRUS-1D simulations of water percolation from a 10-minute irrigation event in sandy soil."
+
+# Plot results
+p <- ggplot(all_theta_df, aes(x = theta, y = z, group = interaction(simulation, timestep))) +
+  # First plot all the grey lines (regular simulations)
+  geom_line(orientation = "y", data = filter(all_theta_df, color_group == "Ks"), aes(color = color_group), size = 0.8) +
+  # Now plot the special cases on top: Ks_min, Ks_center, and Ks_max
+  geom_line(orientation = "y", data = filter(all_theta_df, color_group %in% c("Ks_min", "Ks_center", "Ks_max")),
+            aes(color = color_group), size = 0.8) +
+  scale_x_continuous(breaks = seq(0, ceiling(10*soil_params$ths)/10, by = 0.05))+
+  scale_y_continuous(breaks = seq(0, -Lz/100, by = -.2))+
+  scale_color_manual(name = expression("Ks [" * cm ~ min^-1 *"]"), 
+                     values = c("Ks" = "grey", "Ks_min" = "blue", "Ks_center" = "black", "Ks_max" = "red"),
+                     breaks = c("Ks_min", "Ks_center", "Ks_max"),
+                     labels = c(round(Ks_min, 3), 
+                                round(Ks_values[center_sim], 3), 
+                                round(Ks_max, 3))) +
+  facet_wrap(~ timestep, ncol = 3) +
+  labs(
+    title = "",
+    x = expression("Soil Moisture [" * cm^3 ~ cm^-3 * "]"),
+    y = expression("Depth [m]")
+  ) +
+  theme_bw()+
+  theme(legend.position="top") 
+
+# Print the plot
+print(p)
+
+```
+
+# Conclusions and next steps
+
+The script facilitates the visualisation of HYDRUS-1D results for simple simulations of water trasnport is soils. Including more formal read/write functions from the `hydrusR` package (Acharya, 2020) will allow for higher diversity in the scenarios that can be simulated. 
+
+# References
+
+Diamantopoulos, E. (2017). Running Hydrus (1D) in Matlab, PC-PROGRESS. Accessible online: https://www.pc-progress.com/Downloads/Tutorials/Matlab_RunningHydrus.pdf
+
+Groenendyk, D. (2014). hydrus-batch-matlab. Accessible online: https://github.com/MoonRaker/hydrus-batch-matlab
+
+Kontaxakis, E., Papadimitriou, D., Daliakopoulos, I., Sabathianakis, I., Stavropoulou, A., & Manios, T. (2023). Water Availability in Pumice, Coir, and Perlite Substrates Regulates Grapevine Growth and Grape Physicochemical Characteristics in Soilless Cultivation of Sugraone and Prime Cultivars (Vitis vinifera L.). *Agriculture*, 13(9), 1690.
+
+Mualem, Y. (1976). A new model for predicting the hydraulic conductivity
+of unsaturated porous media. *Water Resources Research*, 12(3), 513-522.
+
+Papadimitriou, D. M., Daliakopoulos, I. N., Louloudakis, I., Savvidis, T. I., Sabathianakis, I., Savvas, D., & Manios, T. (2024). Impact of container geometry and hydraulic properties of coir dust, perlite, and their blends used as growing media, on growth, photosynthesis, and yield of Golden Thistle (S. hispanicus L.). *Scientia Horticulturae*, 323, 112425.
+
+R Core Team (2021). R: A Language and Environment for Statistical
+Computing. R Foundation for Statistical Computing, Vienna, Austria.
+
+Šimůnek, J., Šejna, M., & van Genuchten, M. T. (2008). The Hydrus-1D
+Software Package for Simulating the Movement of Water, Heat, and
+Multiple Solutes in Variably-Saturated Media. U.S. Salinity Laboratory,
+USDA, Riverside, California.
+
+Acharya, S. (2020). hydrusR. Available online: https://github.com/shoebodh/hydrusR
+
+Temple Lang, D. (2023). RHydrus. Available online: https://github.com/mespe/RHydrus
+
+van Genuchten, M. Th. (1980). A closed-form equation for predicting the
+hydraulic conductivity of unsaturated soils. *Soil Science Society of
+America Journal*, 44(5), 892-898.
+
+Wickham, H. (2016). ggplot2: Elegant Graphics for Data Analysis.
+Springer-Verlag New York.
