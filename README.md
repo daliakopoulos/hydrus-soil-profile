@@ -107,7 +107,7 @@ Figure 1 shows the value of $\theta$ for 9 timesteps (1, 10, 20, …, and
 <img src="profile.png"
 id="fig-1" style="width:100.0%"
 alt="Figure 1: Soil moisture \theta~[cm^3 cm{-3}] for 9 timesteps (1, 10, 20, …, and 960 minutes) picked across multiple HYDRUS-1D simulations of water percolation from a 10-minute irrigation event in sandy soil." />
-<em>Figure 1: Soil moisture $\theta~[cm^3 cm{-3}]$ for 9 timesteps (1, 10, 20, …, and 960 minutes) picked across multiple HYDRUS-1D simulations of water percolation from a 10-minute irrigation event in sandy soil.</em>
+<em>Figure 1: Soil moisture for 9 timesteps (1, 10, 20, …, and 960 minutes) picked across multiple HYDRUS-1D simulations of water percolation from a 10-minute irrigation event in sandy soil.</em>
 
 # Conclusions and next steps
 
